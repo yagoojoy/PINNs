@@ -47,9 +47,9 @@ $$\quad u_{LF} = u_{HF} + u_{Noise} , \quad v_{LF} = v_{HF} + v_{Noise} , \quad 
 
 ## Loss Functions
 
-### Data Loss
-
 $$u_{pred} = u_{LF} + \delta u, \quad v_{pred} = v_{LF} + \delta v, \quad P_{pred} = P_{LF} + \delta P$$
+
+### Data Loss
 
 $$\mathcal{L}_{data} = \frac{1}{N}\sum_{i=1}^{N}\left[(u_{pred} - u_{HF})^2 + (v_{pred} - v_{HF})^2 + (P_{pred} - P_{HF})^2\right]$$
 
