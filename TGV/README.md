@@ -29,11 +29,11 @@ $$\quad u_{HF} = -0.25\{\cos(2\pi x) + \cos(2\pi y)\}\, e^{-4\pi^2 \nu t}$$
 
 ### Unphysical Noise (simulating LF CFD error)
 
-$$\quad u_{Noise} = 0.1\, e^{-2\pi^2 \nu t} \sin(2\pi x)\sin(2\pi y)$$
+$$\quad u_{Noise} = 0.1\ e^{-2\pi^2 \nu t} \sin(2\pi x)\sin(2\pi y)$$
 
-$$\quad u_{Noise} = 0.1\, e^{-2\pi^2 \nu t} \cos(2\pi x)\cos(2\pi y)$$
+$$\quad u_{Noise} = 0.1\ e^{-2\pi^2 \nu t} \cos(2\pi x)\cos(2\pi y)$$
 
-$$\quad u_{Noise} = 0.025\, e^{-4\pi^2 \nu t} \sin(\pi x)$$
+$$\quad u_{Noise} = 0.025\ e^{-4\pi^2 \nu t} \sin(\pi x)$$
 
 ### Low-Fidelity (LF) — HF + Noise
 
