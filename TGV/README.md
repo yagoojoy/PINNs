@@ -84,11 +84,11 @@ $$u_{pred} = u^L + \delta u, \quad v_{pred} = v^L + \delta v, \quad P_{pred} = P
 
 ### Phase 1: Training (0 ~ 10s) — 3-Step Optimization
 
-| Step | Optimizer          | Loss                                                  |
-| ---- | ------------------ | ----------------------------------------------------- |
-| 1    | Adam warm-up       | $\mathcal{L}_{data}$ only                             |
-| 2    | Adam               | $100*\cdot\mathcal{L}_{data} + \mathcal{L}_{physics}$ |
-| 3    | L-BFGS fine-tuning | $100*\cdot\mathcal{L}_{data} + \mathcal{L}_{physics}$ |
+| Step | Optimizer          | Loss                     |
+| ---- | ------------------ | ------------------------ |
+| 1    | Adam warm-up       | Data loss only           |
+| 2    | Adam               | 100 × L_data + L_physics |
+| 3    | L-BFGS fine-tuning | 100 × L_data + L_physics |
 
 ### Phase 2: Adaptive Extrapolation (10 ~ 30s)
 
