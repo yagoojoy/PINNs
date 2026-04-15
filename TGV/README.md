@@ -37,7 +37,7 @@ $$\quad u_{Noise} = 0.025\, e^{-4\pi^2 \nu t} \sin(\pi x)$$
 
 ### Low-Fidelity (LF) — HF + Noise
 
-$$\quad u_{LF} = u_{HF} + u_{Noise}, v^{LF} = v_{HF} + v_{Noise}, P_{LF} = P_{HF} + P_{Noise}$$
+$$\quad u_{LF} = u_{HF} + u_{Noise}, \quad v^{LF} = v_{HF} + v_{Noise},\quad P_{LF} = P_{HF} + P_{Noise}$$
 
 |    HF Data    |        Noise        |    LF Data    |
 | :-----------: | :-----------------: | :-----------: |
