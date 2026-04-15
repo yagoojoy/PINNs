@@ -21,23 +21,23 @@ The model is trained to correct the LF approximation toward the HF ground truth.
 
 ### High-Fidelity (HF) — Analytical TGV Solution
 
-$$u^{HF} = -\cos(\pi x)\sin(\pi y)\, e^{-2\pi^2 \nu t}$$
+$$\quad u_{HF} = -\cos(\pi x)\sin(\pi y)\, e^{-2\pi^2 \nu t}$$
 
-$$v^{HF} = \sin(\pi x)\cos(\pi y)\, e^{-2\pi^2 \nu t}$$
+$$\quad u_{HF} = \sin(\pi x)\cos(\pi y)\, e^{-2\pi^2 \nu t}$$
 
-$$P^{HF} = -0.25\{\cos(2\pi x) + \cos(2\pi y)\}\, e^{-4\pi^2 \nu t}$$
+$$\quad u_{HF} = -0.25\{\cos(2\pi x) + \cos(2\pi y)\}\, e^{-4\pi^2 \nu t}$$
 
 ### Unphysical Noise (simulating LF CFD error)
 
-$$u_{Noise} = 0.1\, e^{-2\pi^2 \nu t} \sin(2\pi x)\sin(2\pi y)$$
+$$\quad u_{Noise} = 0.1\, e^{-2\pi^2 \nu t} \sin(2\pi x)\sin(2\pi y)$$
 
-$$v_{Noise} = 0.1\, e^{-2\pi^2 \nu t} \cos(2\pi x)\cos(2\pi y)$$
+$$\quad u_{Noise} = 0.1\, e^{-2\pi^2 \nu t} \cos(2\pi x)\cos(2\pi y)$$
 
-$$P_{Noise} = 0.025\, e^{-4\pi^2 \nu t} \sin(\pi x)$$
+$$\quad u_{Noise} = 0.025\, e^{-4\pi^2 \nu t} \sin(\pi x)$$
 
 ### Low-Fidelity (LF) — HF + Noise
 
-$$u^{LF} = u^{HF} + u_{Noise}, \quad v^{LF} = v^{HF} + v_{Noise}, \quad P^{LF} = P^{HF} + P_{Noise}$$
+$$\quad u_{LF} = \quad u_{HF} + \quad u_{Noise}, \quad v^{LF} = \quad v_{HF} + \quad v_{Noise}, \quad P_{LF} \quad P_{HF} + \quad P_{Noise}$$
 
 |    HF Data    |        Noise        |    LF Data    |
 | :-----------: | :-----------------: | :-----------: |
