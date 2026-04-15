@@ -21,26 +21,26 @@ The model is trained to correct the LF approximation toward the HF ground truth.
 
 ### High-Fidelity (HF) — Analytical TGV Solution
 
-$$u^H = -\cos(\pi x)\sin(\pi y)\, e^{-2\pi^2 \nu t}$$
+$$u^HF = -\cos(\pi x)\sin(\pi y)\, e^{-2\pi^2 \nu t}$$
 
-$$v^H = \sin(\pi x)\cos(\pi y)\, e^{-2\pi^2 \nu t}$$
+$$v^HF = \sin(\pi x)\cos(\pi y)\, e^{-2\pi^2 \nu t}$$
 
-$$P^H = -0.25\{\cos(2\pi x) + \cos(2\pi y)\}\, e^{-4\pi^2 \nu t}$$
+$$P^HF = -0.25\{\cos(2\pi x) + \cos(2\pi y)\}\, e^{-4\pi^2 \nu t}$$
 
 ### Unphysical Noise (simulating LF CFD error)
 
-$$u_{noise} = 0.1\, e^{-2\pi^2 \nu t} \sin(2\pi x)\sin(2\pi y)$$
+$$u_{Noise} = 0.1\, e^{-2\pi^2 \nu t} \sin(2\pi x)\sin(2\pi y)$$
 
-$$v_{noise} = 0.1\, e^{-2\pi^2 \nu t} \cos(2\pi x)\cos(2\pi y)$$
+$$v_{Noise} = 0.1\, e^{-2\pi^2 \nu t} \cos(2\pi x)\cos(2\pi y)$$
 
-$$P_{noise} = 0.025\, e^{-4\pi^2 \nu t} \sin(\pi x)$$
+$$P_{Noise} = 0.025\, e^{-4\pi^2 \nu t} \sin(\pi x)$$
 
 ### Low-Fidelity (LF) — HF + Noise
 
-$$u^L = u^H + u_{noise}, \quad v^L = v^H + v_{noise}, \quad P^L = P^H + P_{noise}$$
+$$u^L = u^H + u_{Noise}, \quad v^L = v^H + v_{Noise}, \quad P^L = P^HF + P_{Noise}$$
 
-|        HF Data        |            Noise            |        LF Data        |
-| :-------------------: | :-------------------------: | :-------------------: |
+|    HF Data    |        Noise        |    LF Data    |
+| :-----------: | :-----------------: | :-----------: |
 | ![HF](HF.png) | ![Noise](Noise.png) | ![LF](LF.png) |
 
 ---
@@ -84,9 +84,9 @@ $$u_{pred} = u^L + \delta u, \quad v_{pred} = v^L + \delta v, \quad P_{pred} = P
 
 ### Phase 1: Training (0 ~ 10s) — 3-Step Optimization
 
-| Step | Optimizer          | Loss                                                |
-| ---- | ------------------ | --------------------------------------------------- |
-| 1    | Adam warm-up       | $\mathcal{L}_{data}$ only                           |
+| Step | Optimizer          | Loss                                                  |
+| ---- | ------------------ | ----------------------------------------------------- |
+| 1    | Adam warm-up       | $\mathcal{L}_{data}$ only                             |
 | 2    | Adam               | $100\cdot\mathcal{L}_{data} + \mathcal{L} _{physics}$ |
 | 3    | L-BFGS fine-tuning | $100\cdot\mathcal{L}_{data} + \mathcal{L} _{physics}$ |
 
