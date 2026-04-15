@@ -127,9 +127,11 @@ The model maintains **>95% improvement** over the LF baseline throughout the ext
 TGV/
 ├── train.py          # Phase 1 (training) + Phase 2 (adaptive extrapolation)
 ├── evaluate.py       # Evaluation and result visualization
-├── results/
-│   ├── mse_log.png
-│   └── imp_rate.png
+├── mse_log.png
+│── imp_rate.png
+│── HF.png
+│── Noise.png
+│── LF.png
 └── README.md
 ```
 
