@@ -87,8 +87,8 @@ $$u_{pred} = u^L + \delta u, \quad v_{pred} = v^L + \delta v, \quad P_{pred} = P
 | Step | Optimizer          | Loss                                                |
 | ---- | ------------------ | --------------------------------------------------- |
 | 1    | Adam warm-up       | $\mathcal{L}_{data}$ only                           |
-| 2    | Adam               | $100\cdot\mathcal{L}_{data} + \mathcal{L}{physics}$ |
-| 3    | L-BFGS fine-tuning | $100\cdot\mathcal{L}_{data} + \mathcal{L}{physics}$ |
+| 2    | Adam               | $100\cdot\mathcal{L}_{data} + \mathcal{L}_{physics}$ |
+| 3    | L-BFGS fine-tuning | $100\cdot\mathcal{L}_{data} + \mathcal{L}_{physics}$ |
 
 ### Phase 2: Adaptive Extrapolation (10 ~ 30s)
 
