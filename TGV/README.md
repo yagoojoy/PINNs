@@ -41,7 +41,7 @@ $$u^L = u^H + u_{noise}, \quad v^L = v^H + v_{noise}, \quad P^L = P^H + P_{noise
 
 |        HF Data        |            Noise            |        LF Data        |
 | :-------------------: | :-------------------------: | :-------------------: |
-| ![HF](results/HF.png) | ![Noise](results/Noise.png) | ![LF](results/LF.png) |
+| ![HF](HF.png) | ![Noise](Noise.png) | ![LF](LF.png) |
 
 ---
 
@@ -106,7 +106,7 @@ This prevents catastrophic forgetting while ensuring physical consistency throug
 
 ### MSE Comparison (Training + Extrapolation)
 
-![MSE](results/mse_log.png)
+![MSE](mse_log.png)
 
 - **Blue**: Model prediction error (LF + PINN correction)
 - **Red dashed**: LF baseline error
@@ -115,7 +115,7 @@ This prevents catastrophic forgetting while ensuring physical consistency throug
 
 ### Improvement Rate over LF Baseline
 
-![Improvement Rate](results/imp_rate.png)
+![Improvement Rate](imp_rate.png)
 
 The model maintains **>95% improvement** over the LF baseline throughout the extrapolation range (10 ~ 30s).
 
