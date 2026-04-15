@@ -115,6 +115,10 @@ This prevents catastrophic forgetting while ensuring physical consistency throug
 
 ### Improvement Rate over LF Baseline
 
+$$MSE_{LF} = \frac{1}{N}\sum_{i=1}^{N}(u_{LF} - u_{HF})^2, \qquad MSE_{pred} = \frac{1}{N}\sum_{i=1}^{N}(u_{pred} - u_{HF})^2$$
+
+$$Improvement = \frac{MSE_{LF} - MSE_{pred}}{MSE_{LF}} \times 100\%$$
+
 ![Improvement Rate](imp_rate.png)
 
 The model maintains **>95% improvement** over the LF baseline throughout the extrapolation range (10 ~ 30s).
