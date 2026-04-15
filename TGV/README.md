@@ -49,6 +49,8 @@ $$\quad u_{LF} = u_{HF} + u_{Noise} , \quad v_{LF} = v_{HF} + v_{Noise} , \quad 
 
 ### Data Loss
 
+$$u_{pred} = u_{LF} + \delta u, \quad v_{pred} = v_{LF} + \delta v, \quad P_{pred} = P_{LF} + \delta P$$
+
 $$\mathcal{L}_{data} = \frac{1}{N}\sum_{i=1}^{N}\left[(u_{pred} - u_{HF})^2 + (v_{pred} - v_{HF})^2 + (P_{pred} - P_{HF})^2\right]$$
 
 ### Physics Loss (Navier-Stokes)
@@ -80,7 +82,7 @@ $$\mathcal{L}_{physics} = \mathcal{L}_{mass} + \mathcal{L}_{momentum}$$
 - **Network**: 5-layer MLP with SiLU activations (hidden dim: 128)
 - **Output**: residual corrections `(δu, δv, δp)` added to the LF base solution
 
-$$u_{pred} = u^L + \delta u, \quad v_{pred} = v^L + \delta v, \quad P_{pred} = P^L + \delta P$$
+$$u_{pred} = u_{LF} + \delta u, \quad v_{pred} = v_{LF} + \delta v, \quad P_{pred} = P_{LF} + \delta P$$
 
 ### Phase 1: Training (0 ~ 10s) — 3-Step Optimization
 
