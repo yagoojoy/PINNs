@@ -47,6 +47,12 @@ $$\quad u_{LF} = u_{HF} + u_{Noise} , \quad v_{LF} = v_{HF} + v_{Noise} , \quad 
 
 ## Loss Functions
 
+The model predicts residual corrections $(\delta u, \delta v, \delta P)$ between LF and HF:
+
+$$[\delta u, \delta v, \delta P] = \mathcal{F}(x, y, t; \theta)$$
+
+$$\hat{u}_{HF} = u_{LF} + \delta u, \quad \hat{v}_{HF} = v_{LF} + \delta v, \quad \hat{P}_{HF} = P_{LF} + \delta P$$
+
 $$u_{pred} = u_{LF} + \delta u, \quad v_{pred} = v_{LF} + \delta v, \quad P_{pred} = P_{LF} + \delta P$$
 
 ### Data Loss
