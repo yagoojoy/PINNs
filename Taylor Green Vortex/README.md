@@ -51,23 +51,23 @@ The model predicts residual corrections $(\delta u, \delta v, \delta P)$ between
 
 $$[\delta u,\, \delta v,\, \delta P] = \mathcal{F}(x, y, t;\, \theta)$$
 
-$$\hat{u}_{HF} = u_{LF} + \delta u, \quad \hat{v}_{HF} = v_{LF} + \delta v, \quad \hat{P}_{HF} = P_{LF} + \delta P$$
+$$\hat{u} = u_{LF} + \delta u, \quad \hat{v} = v_{LF} + \delta v, \quad \hat{P} = P_{LF} + \delta P$$
 
 ### Data Loss
 
-$$\mathcal{L}_{data} = \frac{1}{N}\sum_{i=1}^{N}\left[(\hat{u}_{HF} - u_{HF})^2 + (\hat{v}_{HF} - v_{HF})^2 + (\hat{P}_{HF} - P_{HF})^2\right]$$
+$$\mathcal{L}_{data} = \frac{1}{N}\sum_{i=1}^{N}\left[(\hat{u}_{HF} - u_{HF})^2 + (\hat{v}_{HF} - v_{HF})^2 + (\hat{P} - P_{HF})^2\right]$$
 
 ### Physics Loss (Navier-Stokes)
 
 **Continuity equation:**
 
-$$f_c = \frac{\partial \hat{u}_{HF}}{\partial x} + \frac{\partial \hat{v}_{HF}}{\partial y}, \qquad \mathcal{L}_{mass} = \frac{1}{N}\sum_{i=1}^{N} f_c(x_i, y_i, t_i)^2$$
+$$f_c = \frac{\partial \hat{u}}{\partial x} + \frac{\partial \hat{v}}{\partial y}, \qquad \mathcal{L}_{mass} = \frac{1}{N}\sum_{i=1}^{N} f_c(x_i, y_i, t_i)^2$$
 
 **Momentum equations:**
 
-$$f_u = \frac{\partial \hat{u}_{HF}}{\partial t} + \hat{u}_{HF}\frac{\partial \hat{u}_{HF}}{\partial x} + \hat{v}_{HF}\frac{\partial \hat{u}_{HF}}{\partial y} + \frac{\partial \hat{P}_{HF}}{\partial x} - \nu\left(\frac{\partial^2 \hat{u}_{HF}}{\partial x^2} + \frac{\partial^2 \hat{u}_{HF}}{\partial y^2}\right)$$
+$$f_u = \frac{\partial \hat{u}}{\partial t} + \hat{u}\frac{\partial \hat{u}}{\partial x} + \hat{v}\frac{\partial \hat{u}}{\partial y} + \frac{\partial \hat{P}}{\partial x} - \nu\left(\frac{\partial^2 \hat{u}}{\partial x^2} + \frac{\partial^2 \hat{u}}{\partial y^2}\right)$$
 
-$$f_v = \frac{\partial \hat{v}_{HF}}{\partial t} + \hat{u}_{HF}\frac{\partial \hat{v}_{HF}}{\partial x} + \hat{v}_{HF}\frac{\partial \hat{v}_{HF}}{\partial y} + \frac{\partial \hat{P}_{HF}}{\partial y} - \nu\left(\frac{\partial^2 \hat{v}_{HF}}{\partial x^2} + \frac{\partial^2 \hat{v}_{HF}}{\partial y^2}\right)$$
+$$f_v = \frac{\partial \hat{v}}{\partial t} + \hat{u}\frac{\partial \hat{v}}{\partial x} + \hat{v}\frac{\partial \hat{v}}}{\partial y} + \frac{\partial \hat{P}}{\partial y} - \nu\left(\frac{\partial^2 \hat{v}}{\partial x^2} + \frac{\partial^2 \hat{v}}{\partial y^2}\right)$$
 
 $$\mathcal{L}_{momentum} = \frac{1}{N}\sum_{i=1}^{N}\left[f_u(x_i, y_i, t_i)^2 + f_v(x_i, y_i, t_i)^2\right]$$
 
@@ -86,7 +86,7 @@ $$\mathcal{L}_{physics} = \mathcal{L}_{mass} + \mathcal{L}_{momentum}$$
 - **Network**: 5-layer MLP with SiLU activations (hidden dim: 128)
 - **Output**: residual corrections `(δu, δv, δP)` added to the LF base solution
 
-$$[\delta u,\, \delta v,\, \delta P] = \mathcal{F}(x, y, t;\, \theta), \qquad \hat{u}_{HF} = u_{LF} + \delta u, \quad \hat{v}_{HF} = v_{LF} + \delta v, \quad \hat{P}_{HF} = P_{LF} + \delta P$$
+$$[\delta u,\, \delta v,\, \delta P] = \mathcal{F}(x, y, t;\, \theta), \qquad \hat{u} = u_{LF} + \delta u, \quad \hat{v} = v_{LF} + \delta v, \quad \hat{P} = P_{LF} + \delta P$$
 
 ### Phase 1: Training (0 ~ 10s) — 3-Step Optimization
 
@@ -121,7 +121,7 @@ This prevents catastrophic forgetting while ensuring physical consistency throug
 
 ### Improvement Rate over LF Baseline
 
-$$MSE_{LF} = \frac{1}{N}\sum_{i=1}^{N}(u_{LF} - u_{HF})^2, \qquad MSE_{pred} = \frac{1}{N}\sum_{i=1}^{N}(\hat{u}_{HF} - u_{HF})^2$$
+$$MSE_{LF} = \frac{1}{N}\sum_{i=1}^{N}(u_{LF} - u_{HF})^2, \qquad MSE_{pred} = \frac{1}{N}\sum_{i=1}^{N}(\hat{u} - u_{HF})^2$$
 
 $$Improvement = \frac{MSE_{LF} - MSE_{pred}}{MSE_{LF}} \times 100\%$$
 
