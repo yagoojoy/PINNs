@@ -67,7 +67,7 @@ $$f_c = \frac{\partial \hat{u}}{\partial x} + \frac{\partial \hat{v}}{\partial y
 
 $$f_u = \frac{\partial \hat{u}}{\partial t} + \hat{u}\frac{\partial \hat{u}}{\partial x} + \hat{v}\frac{\partial \hat{u}}{\partial y} + \frac{\partial \hat{P}}{\partial x} - \nu\left(\frac{\partial^2 \hat{u}}{\partial x^2} + \frac{\partial^2 \hat{u}}{\partial y^2}\right)$$
 
-$$f_v = \frac{\partial \hat{v}}{\partial t} + \hat{u}\frac{\partial \hat{v}}{\partial x} + \hat{v}\frac{\partial \hat{v}}}{\partial y} + \frac{\partial \hat{P}}{\partial y} - \nu\left(\frac{\partial^2 \hat{v}}{\partial x^2} + \frac{\partial^2 \hat{v}}{\partial y^2}\right)$$
+$$f_v = \frac{\partial \hat{v}}{\partial t} + \hat{u}\frac{\partial \hat{v}}{\partial x} + \hat{v}\frac{\partial \hat{v}}{\partial y} + \frac{\partial \hat{P}}{\partial y} - \nu\left(\frac{\partial^2 \hat{v}}{\partial x^2} + \frac{\partial^2 \hat{v}}{\partial y^2}\right)$$
 
 $$\mathcal{L}_{momentum} = \frac{1}{N}\sum_{i=1}^{N}\left[f_u(x_i, y_i, t_i)^2 + f_v(x_i, y_i, t_i)^2\right]$$
 
