@@ -55,7 +55,7 @@ $$\hat{u} = u_{LF} + \delta u, \quad \hat{v} = v_{LF} + \delta v, \quad \hat{P} 
 
 ### Data Loss
 
-$$\mathcal{L}_{data} = \frac{1}{N}\sum_{i=1}^{N}\left[(\hat{u}_{HF} - u_{HF})^2 + (\hat{v}_{HF} - v_{HF})^2 + (\hat{P} - P_{HF})^2\right]$$
+$$\mathcal{L}_{data} = \frac{1}{N}\sum_{i=1}^{N}\left[(\hat{u} - u_{HF})^2 + (\hat{v} - v_{HF})^2 + (\hat{P} - P_{HF})^2\right]$$
 
 ### Physics Loss (Navier-Stokes)
 
