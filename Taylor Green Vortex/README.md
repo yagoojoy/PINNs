@@ -23,17 +23,17 @@ The model is trained to correct the LF approximation toward the HF ground truth.
 
 $$\quad u_{HF} = -\cos(\pi x)\sin(\pi y)\, e^{-2\pi^2 \nu t}$$
 
-$$\quad u_{HF} = \sin(\pi x)\cos(\pi y)\, e^{-2\pi^2 \nu t}$$
+$$\quad v_{HF} = \sin(\pi x)\cos(\pi y)\, e^{-2\pi^2 \nu t}$$
 
-$$\quad u_{HF} = -0.25\{\cos(2\pi x) + \cos(2\pi y)\}\, e^{-4\pi^2 \nu t}$$
+$$\quad P_{HF} = -0.25\{\cos(2\pi x) + \cos(2\pi y)\}\, e^{-4\pi^2 \nu t}$$
 
 ### Unphysical Noise (simulating LF CFD error)
 
 $$\quad u_{Noise} = 0.1e^{-2\pi^2 \nu t} \sin(2\pi x)\sin(2\pi y)$$
 
-$$\quad u_{Noise} = 0.1e^{-2\pi^2 \nu t} \cos(2\pi x)\cos(2\pi y)$$
+$$\quad v_{Noise} = 0.1e^{-2\pi^2 \nu t} \cos(2\pi x)\cos(2\pi y)$$
 
-$$\quad u_{Noise} = 0.025e^{-4\pi^2 \nu t} \sin(\pi x)$$
+$$\quad P_{Noise} = 0.025e^{-4\pi^2 \nu t} \sin(\pi x)$$
 
 ### Low-Fidelity (LF) — HF + Noise
 
