@@ -112,7 +112,7 @@ $$\mathcal{L}_{physics} = \mathcal{L}_{mass} + \mathcal{L}_{momentum}$$
 
 ### MSE Comparison (Training + Extrapolation)
 
-![MSE](mse_log.png)
+![MSE](mse_logs.png)
 
 - **Blue**: Model prediction error (LF + PINN correction)
 - **Red dashed**: LF baseline error
