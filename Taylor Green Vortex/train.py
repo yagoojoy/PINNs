@@ -72,7 +72,6 @@ class FluidGenerator:
 
 generator = FluidGenerator(L=L_val, nu=nu_val)
 
-
 # ==========================================
 # 2. Model Definition (Input: x, y, t -> Output: Residual Correction)
 # ==========================================
@@ -109,7 +108,6 @@ class ResidualPINN(nn.Module):
 
 # PDE residual loss: enforces Navier-Stokes equations on the predicted flow field
 def get_pde_loss(model, x, y, t):
-    # Residual correction predicted by the model
     correction = model(x, y, t)
     u_c, v_c, p_c = correction[:,0:1], correction[:,1:2], correction[:,2:3]
 
@@ -142,7 +140,6 @@ def get_pde_loss(model, x, y, t):
     return torch.mean(f_mass**2), torch.mean(f_u**2 + f_v**2)
 
 print("Setup Complete: Functions & Model Defined.")
-
 
 # ==========================================
 # [Phase 1] Data Generation & 3-Step Training (0 ~ 10s)
@@ -287,6 +284,8 @@ print("=======================================================")
 # ==========================================
 # [Phase 2] Active Extrapolation (10 ~ 30s)
 # ==========================================
+import json
+
 print("\n=======================================================")
 print("   [Phase 2] Active Extrapolation (10 ~ 30s) Start")
 print("=======================================================")
@@ -294,7 +293,7 @@ print("=======================================================")
 # ----------------------------------------------------------------
 # Tuning parameters
 # ----------------------------------------------------------------
-sensitivity = 24.0   # PDE threshold multiplier
+sensitivity = 24.0
 dt = 0.5             # Time step for extrapolation
 T_final = 30.0
 keep_epochs = 200    # Self-refining epochs when PDE error is below threshold
@@ -332,104 +331,115 @@ print("-------------------------------------------------------")
 rb_x, rb_y, rb_t = x_train.detach(), y_train.detach(), t_train.detach()
 rb_u, rb_v, rb_p = u_hf_train.detach(), v_hf_train.detach(), p_hf_train.detach()
 
-phase2_start_time = time.time()
+# Auto-record BOOST time steps
+boost_times = []
 
-while current_t < T_final:
-    target_t = current_t + dt
-    print(f"\n[Time {target_t:4.1f}s]", end=" ")
 
-    # Quality check: evaluate PDE residual at target time
-    x_test = torch.rand(N_test, 1).to(device) * L_val
-    y_test = torch.rand(N_test, 1).to(device) * L_val
-    t_test = (torch.ones(N_test, 1).to(device) * target_t) / T_scale
-    x_test.requires_grad_(True)
-    y_test.requires_grad_(True)
-    t_test.requires_grad_(True)
+def run_phase2():
+    global current_t, rb_x, rb_y, rb_t, rb_u, rb_v, rb_p, boost_times
 
-    l_mass, l_mom = get_pde_loss(model, x_test, y_test, t_test)
-    current_pde_error = (l_mass + l_mom).item()
-    ratio = current_pde_error / pde_threshold
-    print(f"PDE Err: {current_pde_error:.6f} (x{ratio:.2f})", end=" | ")
+    phase2_start_time = time.time()
 
-    train_start_time = time.time()
-    model.train()
+    while current_t < T_final:
+        target_t = current_t + dt
 
-    if current_pde_error > pde_threshold:
-        # BOOST: PDE error exceeds threshold -> inject HF data and retrain
-        print("Status: [BOOST] (Surgical Precision Mode)...")
+        # Quality check: evaluate PDE residual at target time
+        x_test = torch.rand(N_test, 1).to(device) * L_val
+        y_test = torch.rand(N_test, 1).to(device) * L_val
+        t_test = (torch.ones(N_test, 1).to(device) * target_t) / T_scale
+        x_test.requires_grad_(True)
+        y_test.requires_grad_(True)
+        t_test.requires_grad_(True)
 
-        # Fetch HF ground truth at target time
-        X_new, Y_new, u_h, v_h, p_h = generator.get_data_at_t(GRID, GRID, target_t)
-        x_new_t = to_tensor([X_new.flatten()])
-        y_new_t = to_tensor([Y_new.flatten()])
-        t_new_t = to_tensor([np.full(X_new.size, target_t)]) / T_scale
-        u_new_t = to_tensor([u_h.flatten()])
-        v_new_t = to_tensor([v_h.flatten()])
-        p_new_t = to_tensor([p_h.flatten()])
+        l_mass, l_mom = get_pde_loss(model, x_test, y_test, t_test)
+        current_pde_error = (l_mass + l_mom).item()
+        ratio = current_pde_error / pde_threshold
 
-        # Append new data to replay buffer
-        rb_x = torch.cat([rb_x, x_new_t], 0)
-        rb_y = torch.cat([rb_y, y_new_t], 0)
-        rb_t = torch.cat([rb_t, t_new_t], 0)
-        rb_u = torch.cat([rb_u, u_new_t], 0)
-        rb_v = torch.cat([rb_v, v_new_t], 0)
-        rb_p = torch.cat([rb_p, p_new_t], 0)
+        train_start_time = time.time()
+        model.train()
 
-        # Step B: Adam optimization with data loss + forward-looking PDE loss
-        for i in range(300):
-            optimizer.zero_grad()
+        if current_pde_error > pde_threshold:
+            # BOOST: PDE error exceeds threshold -> inject HF data and retrain
+            status = "BOOST"
+            boost_times.append(round(target_t, 2))
 
-            c_new = model(x_new_t, y_new_t, t_new_t)
-            lfn_u, lfn_v, lfn_p = get_lf_solution_torch(x_new_t, y_new_t, t_new_t, L_val, T_scale)
-            loss_new = torch.mean((lfn_u + c_new[:,0:1] - u_new_t)**2 +
-                                  (lfn_v + c_new[:,1:2] - v_new_t)**2 +
-                                  (lfn_p + c_new[:,2:3] - p_new_t)**2)
+            # Fetch HF ground truth at target time
+            X_new, Y_new, u_h, v_h, p_h = generator.get_data_at_t(GRID, GRID, target_t)
+            x_new_t = to_tensor([X_new.flatten()])
+            y_new_t = to_tensor([Y_new.flatten()])
+            t_new_t = to_tensor([np.full(X_new.size, target_t)]) / T_scale
+            u_new_t = to_tensor([u_h.flatten()])
+            v_new_t = to_tensor([v_h.flatten()])
+            p_new_t = to_tensor([p_h.flatten()])
 
-            # Forward-looking PDE loss: sample collocation points in [current_t, target_t]
-            t_future = (torch.rand(2000, 1, device=device) * dt + current_t) / T_scale
-            x_p = (torch.rand(2000, 1, device=device) * L_val).requires_grad_(True)
-            y_p = (torch.rand(2000, 1, device=device) * L_val).requires_grad_(True)
-            t_future = t_future.requires_grad_(True)
-            lm, lmo = get_pde_loss(model, x_p, y_p, t_future)
+            # Append new data to replay buffer
+            rb_x = torch.cat([rb_x, x_new_t], 0)
+            rb_y = torch.cat([rb_y, y_new_t], 0)
+            rb_t = torch.cat([rb_t, t_new_t], 0)
+            rb_u = torch.cat([rb_u, u_new_t], 0)
+            rb_v = torch.cat([rb_v, v_new_t], 0)
+            rb_p = torch.cat([rb_p, p_new_t], 0)
 
-            total_loss = loss_new * 100.0 + (lm + lmo) * 10.0
-            total_loss.backward()
-            optimizer.step()
+            # Adam optimization with data loss + forward-looking PDE loss
+            for i in range(300):
+                optimizer.zero_grad()
+                c_new = model(x_new_t, y_new_t, t_new_t)
+                lfn_u, lfn_v, lfn_p = get_lf_solution_torch(x_new_t, y_new_t, t_new_t, L_val, T_scale)
+                loss_new = torch.mean((lfn_u + c_new[:,0:1] - u_new_t)**2 +
+                                      (lfn_v + c_new[:,1:2] - v_new_t)**2 +
+                                      (lfn_p + c_new[:,2:3] - p_new_t)**2)
 
-        # Step C: L-BFGS fine-tuning on current time step
-        print("   -> L-BFGS Fine-tuning...", end="")
-        lbfgs = optim.LBFGS(model.parameters(), max_iter=50, line_search_fn="strong_wolfe")
+                # Forward-looking PDE loss: sample collocation points in [current_t, target_t]
+                x_p = (torch.rand(2000, 1, device=device) * L_val).requires_grad_(True)
+                y_p = (torch.rand(2000, 1, device=device) * L_val).requires_grad_(True)
+                t_future = ((torch.rand(2000, 1, device=device) * dt + current_t) / T_scale).requires_grad_(True)
+                lm, lmo = get_pde_loss(model, x_p, y_p, t_future)
 
-        def closure():
-            lbfgs.zero_grad()
-            c = model(x_new_t, y_new_t, t_new_t)
-            lfn_u, lfn_v, lfn_p = get_lf_solution_torch(x_new_t, y_new_t, t_new_t, L_val, T_scale)
-            loss = torch.mean((lfn_u + c[:,0:1] - u_new_t)**2 + (lfn_v + c[:,1:2] - v_new_t)**2)
-            loss.backward()
-            return loss
+                total_loss = loss_new * 100.0 + (lm + lmo) * 10.0
+                total_loss.backward()
+                optimizer.step()
 
-        lbfgs.step(closure)
-        print(" Done.")
+            # L-BFGS fine-tuning on current time step
+            lbfgs = optim.LBFGS(model.parameters(), max_iter=50, line_search_fn="strong_wolfe")
+            def closure():
+                lbfgs.zero_grad()
+                c = model(x_new_t, y_new_t, t_new_t)
+                lfn_u, lfn_v, lfn_p = get_lf_solution_torch(x_new_t, y_new_t, t_new_t, L_val, T_scale)
+                loss = torch.mean((lfn_u + c[:,0:1] - u_new_t)**2 + (lfn_v + c[:,1:2] - v_new_t)**2)
+                loss.backward()
+                return loss
+            lbfgs.step(closure)
 
-    else:
-        # KEEP: PDE error within threshold -> self-refine with PDE + replay buffer
-        print("Status: [KEEP] (Self-Refining)...")
-        for i in range(keep_epochs):
-            optimizer.zero_grad()
-            lm, lmo = get_pde_loss(model, x_test, y_test, t_test)
+        else:
+            # KEEP: PDE error within threshold -> self-refine with PDE + replay buffer
+            status = "KEEP"
+            for i in range(keep_epochs):
+                optimizer.zero_grad()
+                lm, lmo = get_pde_loss(model, x_test, y_test, t_test)
 
-            # Replay buffer regularization to prevent catastrophic forgetting
-            idx = torch.randperm(rb_x.size(0))[:1000]
-            corr_old = model(rb_x[idx], rb_y[idx], rb_t[idx])
-            lf_u, _, _ = get_lf_solution_torch(rb_x[idx], rb_y[idx], rb_t[idx], L_val, T_scale)
-            loss_reg = torch.mean((lf_u + corr_old[:,0:1] - rb_u[idx])**2)
+                # Replay buffer regularization to prevent catastrophic forgetting
+                idx = torch.randperm(rb_x.size(0))[:1000]
+                corr_old = model(rb_x[idx], rb_y[idx], rb_t[idx])
+                lf_u, _, _ = get_lf_solution_torch(rb_x[idx], rb_y[idx], rb_t[idx], L_val, T_scale)
+                loss_reg = torch.mean((lf_u + corr_old[:,0:1] - rb_u[idx])**2)
 
-            loss = (lm + lmo) * 10.0 + loss_reg * 100.0
-            loss.backward()
-            optimizer.step()
+                loss = (lm + lmo) * 10.0 + loss_reg * 100.0
+                loss.backward()
+                optimizer.step()
 
-    print(f"   -> Train: {time.time() - train_start_time:.2f}s")
-    current_t = target_t
+        train_duration = time.time() - train_start_time
+        print(f"[Time {target_t:4.1f}s] PDE Err: {current_pde_error:.6f} (x{ratio:.2f}) | Status: [{status}] | Train: {train_duration:.2f}s")
 
-total_phase2_time = time.time() - phase2_start_time
-print(f"\n[Phase 2] Complete. Total Time: {total_phase2_time:.1f}s")
+        current_t = target_t
+
+    total_phase2_time = time.time() - phase2_start_time
+    print(f"\n[Phase 2] Complete. Total Time: {total_phase2_time:.1f}s")
+    print(f">> BOOST occurred at: {boost_times}")
+
+    # Save boost_times for use in evaluate.py
+    with open("boost_times.json", "w") as f:
+        json.dump(boost_times, f)
+    print(">> boost_times saved to boost_times.json")
+
+
+run_phase2()
