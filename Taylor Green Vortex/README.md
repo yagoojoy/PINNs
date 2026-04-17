@@ -126,7 +126,6 @@ The model maintains **>95% improvement** over the LF baseline throughout the ext
 Taylor Green Vortex/
 ├── train.py          # Phase 1 (training) + Phase 2 (adaptive extrapolation)
 ├── evaluate.py       # Evaluation and result visualization
-├── mse_log.png
 ├── imp_rate.png
 ├── HF.png
 ├── Noise.png
