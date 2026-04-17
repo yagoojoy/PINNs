@@ -108,15 +108,6 @@ This prevents catastrophic forgetting while ensuring physical consistency throug
 
 ## Results
 
-### MSE Comparison (Training + Extrapolation)
-
-![MSE](mse_log.png)
-
-- **Blue**: Model prediction error (LF + PINN correction)
-- **Red dashed**: LF baseline error
-- **Stars**: Time steps where HF data was injected (BOOST)
-- **Dotted vertical line**: boundary between training (left) and extrapolation (right)
-
 ### Improvement Rate over LF Baseline
 
 $$MSE_{LF} = \frac{1}{N}\sum_{i=1}^{N}(u_{LF} - u_{HF})^2, \qquad MSE_{pred} = \frac{1}{N}\sum_{i=1}^{N}(\hat{u} - u_{HF})^2$$
