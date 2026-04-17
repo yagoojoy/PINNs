@@ -12,7 +12,6 @@ manual_boost_times = [14.5, 15.0, 15.5, 16.0, 17.0, 18.5, 20.0, 21.5, 23.0, 25.5
 # ==========================================
 # Setup: import model and utilities from train.py
 # ==========================================
-from train import ResidualPINN, FluidGenerator, get_lf_solution_torch, L_val, T_scale, GRID, device
 
 generator = FluidGenerator(L=L_val, nu=0.001)
 model = ResidualPINN().to(device)
