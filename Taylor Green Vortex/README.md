@@ -45,6 +45,37 @@ $$u_{LF} = u_{HF} + u_{Noise}, \quad v_{LF} = v_{HF} + v_{Noise}, \quad P_{LF} =
 
 ---
 
+## Method
+
+### Model Architecture
+
+- **Input**: `(x, y, t)` → 3D coordinate vector
+- **Fourier Embedding**: Random Fourier Features to mitigate spectral bias
+- **Network**: 5-layer MLP with SiLU activations (hidden dim: 128)
+- **Output**: residual corrections `(δu, δv, δP)` added to the LF base solution
+
+$$[\delta u,\, \delta v,\, \delta P] = \mathcal{F}(x, y, t;\, \theta), \qquad \hat{u} = u_{LF} + \delta u, \quad \hat{v} = v_{LF} + \delta v, \quad \hat{P} = P_{LF} + \delta P$$
+
+### Phase 1: Training (0 ~ 10s) — 3-Step Optimization
+
+| Step | Optimizer          | Loss                                                  |
+| ---- | ------------------ | ----------------------------------------------------- |
+| 1    | Adam               | $\mathcal{L}_{data}$ only                             |
+| 2    | Adam               | $100\cdot\mathcal{L}_ {data} + \mathcal{L}_{pyhsics}$ |
+| 3    | L-BFGS fine-tuning | $100\cdot\mathcal{L}_ {data} + \mathcal{L}_{pyhsics}$ |
+
+### Phase 2: Adaptive Extrapolation (10 ~ 30s)
+
+The model extrapolates beyond the training window using a **PDE residual-based adaptive loop**:
+
+- At each time step, $\mathcal{L}_{physics}$ is evaluated against an adaptive threshold
+- If residual **exceeds** threshold → **BOOST**: inject HF data and retrain locally (Adam × 300 + L-BFGS × 50)
+- If residual **within** threshold → **KEEP**: self-refine using PDE loss + replay buffer regularization (× 200)
+
+This prevents catastrophic forgetting while ensuring physical consistency throughout extrapolation.
+
+---
+
 ## Loss Functions
 
 The model predicts residual corrections $(\delta u, \delta v, \delta P)$ between LF and HF:
@@ -77,36 +108,16 @@ $$\mathcal{L}_{physics} = \mathcal{L}_{mass} + \mathcal{L}_{momentum}$$
 
 ---
 
-## Method
-
-### Model Architecture
-
-- **Input**: `(x, y, t)` → 3D coordinate vector
-- **Fourier Embedding**: Random Fourier Features to mitigate spectral bias
-- **Network**: 5-layer MLP with SiLU activations (hidden dim: 128)
-- **Output**: residual corrections `(δu, δv, δP)` added to the LF base solution
-
-### Phase 1: Training (0 ~ 10s) — 3-Step Optimization
-
-| Step | Optimizer          | Loss                                                   |
-| ---- | ------------------ | ------------------------------------------------------ |
-| 1    | Adam               | $\mathcal{L}_{data}$ only                              |
-| 2    | Adam               | $100\cdot\mathcal{L}_{data} + \mathcal{L}_{physics}$   |
-| 3    | L-BFGS fine-tuning | $100\cdot\mathcal{L}_{data} + \mathcal{L}_{physics}$   |
-
-### Phase 2: Adaptive Extrapolation (10 ~ 30s)
-
-The model extrapolates beyond the training window using a **PDE residual-based adaptive loop**:
-
-- At each time step, $\mathcal{L}_{physics}$ is evaluated against an adaptive threshold
-- If residual **exceeds** threshold → **BOOST**: inject HF data and retrain locally (Adam × 300 + L-BFGS × 50)
-- If residual **within** threshold → **KEEP**: self-refine using PDE loss + replay buffer regularization (× 200)
-
-This prevents catastrophic forgetting while ensuring physical consistency throughout extrapolation.
-
----
-
 ## Results
+
+### MSE Comparison (Training + Extrapolation)
+
+![MSE](mse_log.png)
+
+- **Blue**: Model prediction error (LF + PINN correction)
+- **Red dashed**: LF baseline error
+- **Stars**: Time steps where HF data was injected (BOOST)
+- **Dotted vertical line**: boundary between training (left) and extrapolation (right)
 
 ### Improvement Rate over LF Baseline
 
@@ -126,6 +137,7 @@ The model maintains **>95% improvement** over the LF baseline throughout the ext
 Taylor Green Vortex/
 ├── train.py          # Phase 1 (training) + Phase 2 (adaptive extrapolation)
 ├── evaluate.py       # Evaluation and result visualization
+├── mse_log.png
 ├── imp_rate.png
 ├── HF.png
 ├── Noise.png
