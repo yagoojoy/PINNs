@@ -21,11 +21,11 @@ The model is trained to correct the LF approximation toward the HF ground truth.
 
 ### High-Fidelity (HF) — Analytical TGV Solution
 
-$$u_{HF} = -\cos(\pi x)\sin(\pi y) \e^{-2\pi^2 \nu t}$$
+$$u_{HF} = -\cos(\pi x)\sin(\pi y) e^{-2\pi^2 \nu t}$$
 
-$$v_{HF} = \sin(\pi x)\cos(\pi y) \e^{-2\pi^2 \nu t}$$
+$$v_{HF} = \sin(\pi x)\cos(\pi y) e^{-2\pi^2 \nu t}$$
 
-$$P_{HF} = -0.25\{\cos(2\pi x) + \cos(2\pi y)\} \e^{-4\pi^2 \nu t}$$
+$$P_{HF} = -0.25\{\cos(2\pi x) + \cos(2\pi y)\} e^{-4\pi^2 \nu t}$$
 
 ### Unphysical Noise (simulating LF CFD error)
 
