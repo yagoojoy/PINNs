@@ -62,7 +62,7 @@ $$[\delta u,\, \delta v,\, \delta P] = \mathcal{F}(x, y, t;\, \theta), \qquad \h
 | ---- | ------------------ | ----------------------------------------------------- |
 | 1    | Adam               | $\mathcal{L}_{data}$ only                             |
 | 2    | Adam               | $100\cdot\mathcal{L}_ {data} + \mathcal{L}_{pyhsics}$ |
-| 3    | L-BFGS fine-tuning | $100\cdot\mathcal{L}_ {data} + \mathcal{L}_{pyhsics}$ |
+| 3    | L-BFGS             | $100\cdot\mathcal{L}_ {data} + \mathcal{L}_{pyhsics}$ |
 
 ### Phase 2: Adaptive Extrapolation (10 ~ 30s)
 
