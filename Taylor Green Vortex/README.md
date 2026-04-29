@@ -58,11 +58,11 @@ $$[\delta u,\, \delta v,\, \delta P] = \mathcal{F}(x, y, t;\, \theta), \qquad \h
 
 ### Phase 1: Training (0 ~ 10s) — 3-Step Optimization
 
-| Step | Optimizer          | Loss                                                  |
-| ---- | ------------------ | ----------------------------------------------------- |
-| 1    | Adam               | $\mathcal{L}_{data}$ only                             |
-| 2    | Adam               | $100\cdot\mathcal{L}_ {data} + \mathcal{L}_{physics}$ |
-| 3    | L-BFGS             | $100\cdot\mathcal{L}_ {data} + \mathcal{L}_{physics}$ |
+| Step | Optimizer | Loss |
+| ---- | --------- | ---- |
+| 1    | Adam      | $\mathcal{L}_{data}$ only |
+| 2    | Adam      | $\lambda_{data}\mathcal{L}_{data} + \lambda_{physics}\mathcal{L}_{physics}$ |
+| 3    | L-BFGS    | $\lambda_{data}\mathcal{L}_{data} + \lambda_{physics}\mathcal{L}_{physics}$ |
 
 ### Phase 2: Adaptive Extrapolation (10 ~ 30s)
 
