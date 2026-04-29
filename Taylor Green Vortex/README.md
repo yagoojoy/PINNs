@@ -54,7 +54,7 @@ $$u_{LF} = u_{HF} + u_{Noise}, \quad v_{LF} = v_{HF} + v_{Noise}, \quad P_{LF} =
 - **Network**: 5-layer MLP with SiLU activations (hidden dim: 128)
 - **Output**: residual corrections `(δu, δv, δP)` added to the LF base solution
 
-$$[\delta u, \delta v, \delta P] = \mathcal{F}(x, y, t;\, \theta), \qquad \hat{u} = u_{LF} + \delta u, \quad \hat{v} = v_{LF} + \delta v, \quad \hat{P} = P_{LF} + \delta P$$
+$$[\delta u, \delta v, \delta P] = \mathcal{F}(x, y, t; \theta), \qquad \hat{u} = u_{LF} + \delta u, \quad \hat{v} = v_{LF} + \delta v, \quad \hat{P} = P_{LF} + \delta P$$
 
 ### Phase 1: Training (0 ~ 10s) — 3-Step Optimization
 
