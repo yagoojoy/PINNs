@@ -1,20 +1,3 @@
-"""
-evaluate.py — Post-training evaluation and visualization
-
-Loads the PDE residual log produced by train.py and the final trained model,
-then generates three plots saved to results/:
-
-    pde_residual.png — PDE residual measured before each Phase 2 training step
-                       (the actual values that triggered BOOST decisions).
-    mse_log.png      — Data MSE comparison: LF baseline vs. PINN prediction.
-    imp_rate.png     — PINN improvement rate over the LF baseline (%).
-
-Prerequisites (run train.py first):
-    model_phase1.pth, pde_log.npy, pde_threshold.npy
-    (model, generator, get_lf_solution_torch, get_pde_loss, device, L_val,
-     GRID, T_scale must be defined in the same session or imported.)
-"""
-
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
