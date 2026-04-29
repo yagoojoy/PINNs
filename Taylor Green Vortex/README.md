@@ -106,6 +106,18 @@ $$\mathcal{L}_{momentum} = \frac{1}{N}\sum_{i=1}^{N}\left[f_u(x_i, y_i, t_i)^2 +
 
 $$\mathcal{L}_{physics} = \mathcal{L}_{mass} + \mathcal{L}_{momentum}$$
 
+### Loss Weighting
+
+The total training objective combines data and physics losses with phase-dependent weights $\lambda_{data}$ and $\lambda_{physics}$:
+
+$$\mathcal{L}_{total} = \lambda_{data}\,\mathcal{L}_{data} + \lambda_{physics}\,\mathcal{L}_{physics}$$
+
+| Phase | Context | $\lambda_{data}$ | $\lambda_{physics}$ |
+| ----- | ------- | :--------------: | :-----------------: |
+| Phase 1 | Step 2 \& 3 (Adam + L-BFGS) | 100 | 1 |
+| Phase 2 | BOOST (HF injection) | 100 | 10 |
+| Phase 2 | KEEP (self-refinement, PDE only) | — | 10 |
+
 ---
 
 ## Results
