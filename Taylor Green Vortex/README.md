@@ -61,8 +61,8 @@ $$[\delta u,\, \delta v,\, \delta P] = \mathcal{F}(x, y, t;\, \theta), \qquad \h
 | Step | Optimizer | Loss |
 | ---- | --------- | ---- |
 | 1    | Adam      | $\mathcal{L}_{data}$ only |
-| 2    | Adam      | $\lambda_{data}\mathcal{L}_{data} + \lambda_{physics}\mathcal{L}_{physics}$ |
-| 3    | L-BFGS    | $\lambda_{data}\mathcal{L}_{data} + \lambda_{physics}\mathcal{L}_{physics}$ |
+| 2    | Adam      | $\lambda_{data}\mathcal{L}_ {data} + \lambda_{physics}\mathcal{L}_{physics}$ |
+| 3    | L-BFGS    | $\lambda_{data}\mathcal{L}_ {data} + \lambda_{physics}\mathcal{L}_{physics}$ |
 
 ### Phase 2: Adaptive Extrapolation (10 ~ 30s)
 
