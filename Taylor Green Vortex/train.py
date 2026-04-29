@@ -4,143 +4,149 @@ import torch.optim as optim
 import numpy as np
 import time
 
-# ==========================================
-# 0. Environment & Parameter Setup
-# ==========================================
+# ── Hyperparameters ────────────────────────────────────────────────────────────
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 np.random.seed(42)
 torch.manual_seed(42)
 
-L_val, nu_val, GRID = 4.0, 0.001, 100
-T_max_train = 10.0
-T_final = 30.0
-T_scale = 30.0  # Time normalization scale
+L_val      = 4.0    # Domain size [0, L] x [0, L]
+nu_val     = 0.001  # Kinematic viscosity
+GRID       = 100    # Spatial grid resolution for data generation
+T_max_train = 10.0  # Phase 1 training horizon
+T_final    = 30.0   # Phase 2 extrapolation horizon
+T_scale    = 30.0   # Time normalization factor (t_norm = t / T_scale)
+# ──────────────────────────────────────────────────────────────────────────────
 
-# ==========================================
-# 1. Differentiable LF Solution (Core)
-# ==========================================
-# Torch-based reimplementation of LF generator to enable autograd
+
+# ── Low-Fidelity Solution (differentiable, PyTorch) ───────────────────────────
 def get_lf_solution_torch(x_norm, y_norm, t_norm, L, T_s):
-    # Inputs: physical coordinates x, y in [0, L] and normalized time t_norm = t / T_s
-
+    """
+    Returns the LF field: TGV analytical solution + unphysical high-frequency noise.
+    Inputs are physical coords (x, y in [0, L]) and normalized time t_norm = t / T_s.
+    Implemented in PyTorch to support autograd through the composite field u = u_LF + delta_u.
+    """
     t_real = t_norm * T_s
+    decay  = torch.exp(-2 * (np.pi)**2 * nu_val * t_real)
 
-    decay = torch.exp(-2 * (np.pi)**2 * 0.001 * t_real)
+    # TGV exact solution
+    u_tgv = -torch.cos(np.pi * x_norm) * torch.sin(np.pi * y_norm) * decay
+    v_tgv =  torch.sin(np.pi * x_norm) * torch.cos(np.pi * y_norm) * decay
+    p_tgv = -0.25 * (torch.cos(2*np.pi*x_norm) + torch.cos(2*np.pi*y_norm)) * decay**2
+
+    # Unphysical noise at spatial frequency 8π/L (the target for correction)
     noise_scale = 0.1 * decay
-
-    # TGV analytical solution (HF base)
-    u_tgv = -1.0 * torch.cos(np.pi * x_norm) * torch.sin(np.pi * y_norm) * decay
-    v_tgv =  1.0 * torch.sin(np.pi * x_norm) * torch.cos(np.pi * y_norm) * decay
-    p_tgv = -0.25 * (torch.cos(2*np.pi*x_norm) + torch.cos(2*np.pi*y_norm)) * (decay**2)
-
-    # Unphysical noise (spatial frequency: 8pi/L)
     arg_x = 8 * np.pi * x_norm / L
     arg_y = 8 * np.pi * y_norm / L
-
     u_n = noise_scale * torch.sin(arg_x) * torch.sin(arg_y)
     v_n = noise_scale * torch.cos(arg_x) * torch.cos(arg_y)
-    p_n = (decay**2) * 0.1 * 0.25 * torch.sin(arg_x / 2.0)
+    p_n = decay**2 * 0.025 * torch.sin(arg_x / 2.0)
 
     return u_tgv + u_n, v_tgv + v_n, p_tgv + p_n
 
 
-# Ground truth (HF) data generator using NumPy
+# ── High-Fidelity Ground Truth Generator (NumPy) ──────────────────────────────
 class FluidGenerator:
+    """Generates HF ground truth (pure TGV analytical solution) on a spatial grid."""
+
     def __init__(self, L=4.0, nu=0.001):
         self.L, self.nu = L, nu
 
     def get_decay(self, t):
-        k = 1
-        return np.exp(-2 * (k * np.pi)**2 * self.nu * t)
+        return np.exp(-2 * (np.pi)**2 * self.nu * t)
 
     def get_tgv_solution(self, X, Y, t):
-        decay = self.get_decay(t)
-        u = -1.0 * np.cos(np.pi * X) * np.sin(np.pi * Y) * decay
-        v =  1.0 * np.sin(np.pi * X) * np.cos(np.pi * Y) * decay
-        p = -0.25 * (np.cos(2*np.pi * X) + np.cos(2*np.pi*Y)) * (decay**2)
+        d = self.get_decay(t)
+        u = -np.cos(np.pi * X) * np.sin(np.pi * Y) * d
+        v =  np.sin(np.pi * X) * np.cos(np.pi * Y) * d
+        p = -0.25 * (np.cos(2*np.pi*X) + np.cos(2*np.pi*Y)) * d**2
         return u, v, p
 
     def get_data_at_t(self, nx, ny, t_val):
-        x, y = np.linspace(0, self.L, nx), np.linspace(0, self.L, ny)
+        x = np.linspace(0, self.L, nx)
+        y = np.linspace(0, self.L, ny)
         X, Y = np.meshgrid(x, y)
-        u_hf, v_hf, p_hf = self.get_tgv_solution(X, Y, t_val)
-        return X, Y, u_hf, v_hf, p_hf
+        u, v, p = self.get_tgv_solution(X, Y, t_val)
+        return X, Y, u, v, p
 
 generator = FluidGenerator(L=L_val, nu=nu_val)
 
 
-# ==========================================
-# 2. Model Definition (Input: x, y, t -> Output: Correction)
-# ==========================================
+# ── Model ──────────────────────────────────────────────────────────────────────
 class FourierEmbedding(nn.Module):
-    def __init__(self, scale=10.0):
+    """Random Fourier Feature embedding to improve spectral representation."""
+
+    def __init__(self, scale=1.0):
         super().__init__()
         self.register_buffer("B", torch.randn(3, 128) * scale)
 
     def forward(self, coords):
-        x_proj = 2*np.pi * coords @ self.B
-        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
+        x_proj = 2 * np.pi * coords @ self.B
+        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)  # (N, 256)
 
 
 class ResidualPINN(nn.Module):
+    """
+    5-layer MLP that predicts the correction field (delta_u, delta_v, delta_p).
+    Input:  Fourier embedding (256-dim) concatenated with raw coords (x, y, t) → 259-dim.
+    Output: correction vector of size 3.
+    """
+
     def __init__(self):
         super().__init__()
         self.embedding = FourierEmbedding(scale=1.0)
-        # Input: Embedding(256) + Original(3) = 259
         self.net = nn.Sequential(
-            nn.Linear(256+3, 128), nn.SiLU(),
+            nn.Linear(259, 128), nn.SiLU(),
             nn.Linear(128, 128), nn.SiLU(),
             nn.Linear(128, 128), nn.SiLU(),
             nn.Linear(128, 128), nn.SiLU(),
             nn.Linear(128, 128), nn.SiLU(),
-            nn.Linear(128, 3)  # Correction for u, v, p
+            nn.Linear(128, 3),
         )
 
     def forward(self, x, y, t):
         coords = torch.cat([x, y, t], dim=1)
-        emb = self.embedding(coords)
-        inp = torch.cat([emb, coords], dim=1)
-        return self.net(inp)
+        return self.net(torch.cat([self.embedding(coords), coords], dim=1))
 
 
-# PDE residual loss: enforces Navier-Stokes on the predicted flow field
 def get_pde_loss(model, x, y, t):
-    correction = model(x, y, t)
-    u_c, v_c, p_c = correction[:,0:1], correction[:,1:2], correction[:,2:3]
-
+    """
+    Computes Navier-Stokes residuals on the composite field u = u_LF + delta_u.
+    Returns (continuity_loss, momentum_loss) as scalar tensors.
+    Requires x, y, t to have requires_grad=True — do NOT call inside torch.no_grad().
+    """
+    delta = model(x, y, t)
     u_lf, v_lf, p_lf = get_lf_solution_torch(x, y, t, L_val, T_scale)
 
-    # Final predicted flow field: LF + correction
-    u = u_lf + u_c
-    v = v_lf + v_c
-    p = p_lf + p_c
+    u = u_lf + delta[:, 0:1]
+    v = v_lf + delta[:, 1:2]
+    p = p_lf + delta[:, 2:3]
 
     def grad(out, inp):
         return torch.autograd.grad(out, inp, torch.ones_like(out), create_graph=True)[0]
 
-    # Chain rule applied for normalized time
+    # Temporal derivatives: divide by T_scale to account for normalized time input
     u_t = grad(u, t) / T_scale
     v_t = grad(v, t) / T_scale
+
     u_x = grad(u, x); u_y = grad(u, y)
     v_x = grad(v, x); v_y = grad(v, y)
     p_x = grad(p, x); p_y = grad(p, y)
     u_xx = grad(u_x, x); u_yy = grad(u_y, y)
     v_xx = grad(v_x, x); v_yy = grad(v_y, y)
 
-    # Navier-Stokes residuals: continuity and momentum
-    f_mass = u_x + v_y
-    f_u = u_t + (u*u_x + v*u_y) + p_x - nu_val*(u_xx + u_yy)
-    f_v = v_t + (u*v_x + v*v_y) + p_y - nu_val*(v_xx + v_yy)
+    continuity = u_x + v_y
+    mom_u = u_t + u*u_x + v*u_y + p_x - nu_val*(u_xx + u_yy)
+    mom_v = v_t + u*v_x + v*v_y + p_y - nu_val*(v_xx + v_yy)
 
-    return torch.mean(f_mass**2), torch.mean(f_u**2 + f_v**2)
+    return torch.mean(continuity**2), torch.mean(mom_u**2 + mom_v**2)
 
-print("Setup Complete: Functions & Model Defined.")
+print("Setup complete.")
 
 
-# ==========================================
-# [Phase 1] Data Generation & 3-Step Training (0 ~ 10s)
-# ==========================================
-print("Generating Training Data (0~10s)...")
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 1: Supervised + Physics Training  (t = 0 ~ 10s)
+# ══════════════════════════════════════════════════════════════════════════════
+print("Generating Phase 1 training data (t = 0 ~ 10s)...")
 
 train_times = np.linspace(0, T_max_train, 11)
 x_list, y_list, t_list = [], [], []
@@ -148,212 +154,192 @@ u_hf_list, v_hf_list, p_hf_list = [], [], []
 
 for t_val in train_times:
     X, Y, u_h, v_h, p_h = generator.get_data_at_t(GRID, GRID, t_val)
-    x_list.append(X.flatten())
-    y_list.append(Y.flatten())
+    x_list.append(X.flatten());      y_list.append(Y.flatten())
     t_list.append(np.full(X.size, t_val))
-    u_hf_list.append(u_h.flatten())
-    v_hf_list.append(v_h.flatten())
-    p_hf_list.append(p_h.flatten())
+    u_hf_list.append(u_h.flatten()); v_hf_list.append(v_h.flatten()); p_hf_list.append(p_h.flatten())
 
 def to_tensor(arr):
     return torch.tensor(np.concatenate(arr), dtype=torch.float32).view(-1, 1).to(device)
 
-x_train = to_tensor(x_list)
-y_train = to_tensor(y_list)
-t_train = to_tensor(t_list) / T_scale  # Normalize time
+x_train    = to_tensor(x_list)
+y_train    = to_tensor(y_list)
+t_train    = to_tensor(t_list) / T_scale  # normalized
 u_hf_train = to_tensor(u_hf_list)
 v_hf_train = to_tensor(v_hf_list)
 p_hf_train = to_tensor(p_hf_list)
 
-print(f"Data Generation Complete. Shapes: {x_train.shape}")
-
 model = ResidualPINN().to(device)
 
 print("\n=======================================================")
-print("   [Phase 1] Initial Training (0 ~ 10s) Start")
+print("   [Phase 1] Training  (t = 0 ~ 10s)")
 print("=======================================================")
-phase1_start_time = time.time()
+phase1_start = time.time()
 
-# ----------------------------------------------------------------
-# Step 1: Denoising Warm-up (Data Loss Only)
-# ----------------------------------------------------------------
-print("\n[Step 1] Denoising Warm-up (Data Loss Only)...")
+
+# ── Step 1: Denoising warm-up (data loss only) ────────────────────────────────
+# Train purely on HF data first so the network learns the basic correction
+# before physics constraints are introduced.
+print("\n[Step 1] Denoising warm-up...")
 s1_start = time.time()
-optimizer_warmup = optim.Adam(model.parameters(), lr=1e-3)
+opt_warmup = optim.Adam(model.parameters(), lr=1e-3)
 
 for epoch in range(2001):
-    optimizer_warmup.zero_grad()
-
+    opt_warmup.zero_grad()
     u_lf, v_lf, p_lf = get_lf_solution_torch(x_train, y_train, t_train, L_val, T_scale)
-    correction = model(x_train, y_train, t_train)
-    u_pred = u_lf + correction[:,0:1]
-    v_pred = v_lf + correction[:,1:2]
-    p_pred = p_lf + correction[:,2:3]
-
-    loss = torch.mean((u_pred - u_hf_train)**2 + (v_pred - v_hf_train)**2 + (p_pred - p_hf_train)**2)
+    corr = model(x_train, y_train, t_train)
+    loss = torch.mean(
+        (u_lf + corr[:,0:1] - u_hf_train)**2 +
+        (v_lf + corr[:,1:2] - v_hf_train)**2 +
+        (p_lf + corr[:,2:3] - p_hf_train)**2
+    )
     loss.backward()
-    optimizer_warmup.step()
-
+    opt_warmup.step()
     if epoch % 500 == 0:
-        print(f"  > Ep {epoch} | MSE: {loss.item():.7f}")
+        print(f"  Ep {epoch:4d} | MSE: {loss.item():.2e}")
     if loss < 1e-4:
-        print(f"  > Ep {epoch} | MSE: {loss.item():.7f}")
+        print(f"  Ep {epoch:4d} | MSE: {loss.item():.2e}  (early stop)")
         break
 
-print(f">> Step 1 Done. Time: {time.time() - s1_start:.2f}s")
+print(f">> Step 1 done.  ({time.time()-s1_start:.1f}s)")
 
 
-# ----------------------------------------------------------------
-# Step 2: Physics Training with Adam (Data + PDE Loss)
-# ----------------------------------------------------------------
-print("\n[Step 2] Physics Training (Adam)...")
+# ── Step 2: Physics-informed training with Adam ────────────────────────────────
+# Joint optimization of data loss and NS residual loss.
+# Collocation points are randomly sampled each epoch.
+print("\n[Step 2] Physics training (Adam)...")
 s2_start = time.time()
-optimizer_adam = optim.Adam(model.parameters(), lr=5e-4)
-
-x_r, y_r, t_r = None, None, None  # Will store last PDE sample for L-BFGS reuse
+opt_adam = optim.Adam(model.parameters(), lr=5e-4)
+x_r = y_r = t_r = None  # retained for L-BFGS reuse in Step 3
 
 for epoch in range(5001):
-    optimizer_adam.zero_grad()
+    opt_adam.zero_grad()
 
-    # Data loss
     u_lf, v_lf, p_lf = get_lf_solution_torch(x_train, y_train, t_train, L_val, T_scale)
-    correction = model(x_train, y_train, t_train)
-    u_pred = u_lf + correction[:,0:1]
-    v_pred = v_lf + correction[:,1:2]
-    p_pred = p_lf + correction[:,2:3]
-    loss_data = torch.mean((u_pred - u_hf_train)**2 + (v_pred - v_hf_train)**2 + (p_pred - p_hf_train)**2)
+    corr = model(x_train, y_train, t_train)
+    loss_data = torch.mean(
+        (u_lf + corr[:,0:1] - u_hf_train)**2 +
+        (v_lf + corr[:,1:2] - v_hf_train)**2 +
+        (p_lf + corr[:,2:3] - p_hf_train)**2
+    )
 
-    # PDE loss on random collocation points
     idx = torch.randperm(x_train.size(0))[:5000]
     x_r = x_train[idx].clone().detach().requires_grad_(True)
     y_r = y_train[idx].clone().detach().requires_grad_(True)
     t_r = t_train[idx].clone().detach().requires_grad_(True)
-
     l_mass, l_mom = get_pde_loss(model, x_r, y_r, t_r)
-    loss_pde = l_mass + l_mom
 
-    loss = loss_data * 100.0 + loss_pde * 1.0
+    loss = loss_data * 100.0 + (l_mass + l_mom) * 1.0
     loss.backward()
-    optimizer_adam.step()
+    opt_adam.step()
 
     if epoch % 500 == 0:
-        elapsed = time.time() - s2_start
-        print(f"  > Ep {epoch} | Data: {loss_data.item():.6f} | PDE: {loss_pde.item():.6f} | Elapsed: {elapsed:.1f}s")
+        print(f"  Ep {epoch:4d} | Data: {loss_data.item():.2e} | PDE: {(l_mass+l_mom).item():.2e}"
+              f" | {time.time()-s2_start:.0f}s")
 
-print(f">> Step 2 Done. Time: {time.time() - s2_start:.2f}s")
+print(f">> Step 2 done.  ({time.time()-s2_start:.1f}s)")
 
 
-# ----------------------------------------------------------------
-# Step 3: L-BFGS Fine-tuning
-# ----------------------------------------------------------------
-print("\n[Step 3] L-BFGS Fine-tuning...")
+# ── Step 3: L-BFGS fine-tuning ────────────────────────────────────────────────
+# Second-order optimizer for high-precision convergence using the last
+# collocation sample from Step 2.
+print("\n[Step 3] L-BFGS fine-tuning...")
 s3_start = time.time()
-
 lbfgs = optim.LBFGS(model.parameters(), max_iter=2000, line_search_fn="strong_wolfe", history_size=50)
 
 def closure():
     lbfgs.zero_grad()
     u_lf, v_lf, p_lf = get_lf_solution_torch(x_train, y_train, t_train, L_val, T_scale)
-    correction = model(x_train, y_train, t_train)
-    u_pred = u_lf + correction[:,0:1]
-    v_pred = v_lf + correction[:,1:2]
-    p_pred = p_lf + correction[:,2:3]
-    loss_data = torch.mean((u_pred - u_hf_train)**2 + (v_pred - v_hf_train)**2 + (p_pred - p_hf_train)**2)
-
-    # Reuse last PDE sample from Step 2
+    corr = model(x_train, y_train, t_train)
+    loss_data = torch.mean(
+        (u_lf + corr[:,0:1] - u_hf_train)**2 +
+        (v_lf + corr[:,1:2] - v_hf_train)**2 +
+        (p_lf + corr[:,2:3] - p_hf_train)**2
+    )
     l_mass, l_mom = get_pde_loss(model, x_r, y_r, t_r)
-
     loss = loss_data * 100.0 + (l_mass + l_mom) * 1.0
     loss.backward()
     return loss
 
 lbfgs.step(closure)
-print(f">> Step 3 Done. Time: {time.time() - s3_start:.2f}s")
+print(f">> Step 3 done.  ({time.time()-s3_start:.1f}s)")
 
-# Save Phase 1 checkpoint
 torch.save(model.state_dict(), "model_phase1.pth")
-total_time = time.time() - phase1_start_time
 print("=======================================================")
-print(f"   [Phase 1] Complete.")
-print(f"   Total Time: {total_time:.1f}s ({total_time/60:.1f} min)")
+print(f"   [Phase 1] Complete.  Total: {(time.time()-phase1_start)/60:.1f} min")
 print("=======================================================")
 
 
-# ==========================================
-# [Phase 2] Active Extrapolation (10 ~ 30s)
-# ==========================================
+# ══════════════════════════════════════════════════════════════════════════════
+# Phase 2: Active Extrapolation  (t = 10 ~ 30s)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# At each time step the model is evaluated before any training:
+#   - BOOST: PDE residual exceeds threshold → inject HF data and retrain.
+#   - KEEP : PDE residual is acceptable    → self-refine with PDE loss only.
+#
+# A replay buffer prevents catastrophic forgetting of Phase 1 knowledge.
+# ──────────────────────────────────────────────────────────────────────────────
 print("\n=======================================================")
-print("   [Phase 2] Active Extrapolation (10 ~ 30s) Start")
+print("   [Phase 2] Active Extrapolation  (t = 10 ~ 30s)")
 print("=======================================================")
 
-# ----------------------------------------------------------------
-# Tuning parameters
-# ----------------------------------------------------------------
-sensitivity = 24.0
-dt = 0.5            # Time step
-T_final = 30.0
-keep_epochs = 200   # Self-refining epochs when PDE error is below threshold
-# ----------------------------------------------------------------
+# Phase 2 hyperparameters
+sensitivity  = 24.0   # threshold = baseline_error * sensitivity
+dt           = 0.5    # time step (s)
+keep_epochs  = 200    # self-refining epochs for KEEP steps
 
-try:
-    model.load_state_dict(torch.load("model_phase1.pth"))
-except FileNotFoundError:
-    print("Error: model_phase1.pth not found. Run Phase 1 first.")
-    assert False, "Model file not found."
-
+model.load_state_dict(torch.load("model_phase1.pth"))
 optimizer = optim.Adam(model.parameters(), lr=5e-5)
 
-# Compute baseline PDE error at t=10s to set adaptive threshold
+# Adaptive threshold: measure PDE residual at t=10s (end of training domain)
+# and scale by sensitivity. Requires autograd — must be outside torch.no_grad().
 current_t = 10.0
-print("Calculating Baseline PDE Error at t=10.0s...")
 N_test = 2000
-with torch.no_grad():
-    x_test_base = torch.rand(N_test, 1).to(device) * L_val
-    y_test_base = torch.rand(N_test, 1).to(device) * L_val
-    t_test_base = (torch.ones(N_test, 1).to(device) * current_t) / T_scale
-    x_test_base.requires_grad_(True)
-    y_test_base.requires_grad_(True)
-    t_test_base.requires_grad_(True)
-
-base_mass, base_mom = get_pde_loss(model, x_test_base, y_test_base, t_test_base)
+x_b = (torch.rand(N_test, 1) * L_val).to(device).requires_grad_(True)
+y_b = (torch.rand(N_test, 1) * L_val).to(device).requires_grad_(True)
+t_b = (torch.ones(N_test, 1) * current_t / T_scale).to(device).requires_grad_(True)
+base_mass, base_mom = get_pde_loss(model, x_b, y_b, t_b)
 baseline_error = (base_mass + base_mom).item()
-pde_threshold = baseline_error * sensitivity
+pde_threshold  = baseline_error * sensitivity
 
-print(f">> Baseline PDE Error: {baseline_error:.7f}")
-print(f">> Adaptive Threshold set to: {pde_threshold:.7f} (Sensitivity: x{sensitivity})")
+print(f">> Baseline PDE residual at t=10s : {baseline_error:.2e}")
+print(f">> BOOST threshold (x{sensitivity:.0f})      : {pde_threshold:.2e}")
 print("-------------------------------------------------------")
 
-# Initialize replay buffer with Phase 1 training data
+# Replay buffer initialized with Phase 1 training data
 rb_x, rb_y, rb_t = x_train.detach(), y_train.detach(), t_train.detach()
 rb_u, rb_v, rb_p = u_hf_train.detach(), v_hf_train.detach(), p_hf_train.detach()
 
-phase2_start_time = time.time()
+# Per-step log: (time, pde_error_before_training, is_boost)
+# Saved to pde_log.npy for post-hoc analysis in evaluate.py.
+boost_points = []
+pde_log = []
+
+phase2_start = time.time()
 
 while current_t < T_final:
     target_t = current_t + dt
-    print(f"\n[Time {target_t:4.1f}s]", end=" ")
+    print(f"\n[t = {target_t:5.1f}s]", end="  ")
 
-    # Quality check: evaluate PDE residual at target time
-    x_test = torch.rand(N_test, 1).to(device) * L_val
-    y_test = torch.rand(N_test, 1).to(device) * L_val
-    t_test = (torch.ones(N_test, 1).to(device) * target_t) / T_scale
-    x_test.requires_grad_(True)
-    y_test.requires_grad_(True)
-    t_test.requires_grad_(True)
-
+    # Evaluate PDE residual BEFORE any training at this step (the actual trigger value)
+    x_test = (torch.rand(N_test, 1) * L_val).to(device).requires_grad_(True)
+    y_test = (torch.rand(N_test, 1) * L_val).to(device).requires_grad_(True)
+    t_test = (torch.ones(N_test, 1) * target_t / T_scale).to(device).requires_grad_(True)
     l_mass, l_mom = get_pde_loss(model, x_test, y_test, t_test)
     current_pde_error = (l_mass + l_mom).item()
-    ratio = current_pde_error / pde_threshold
-    print(f"PDE Err: {current_pde_error:.6f} (x{ratio:.2f})", end=" | ")
+    print(f"PDE residual: {current_pde_error:.2e}  (ratio: {current_pde_error/pde_threshold:.2f})", end="  |  ")
 
-    train_start_time = time.time()
+    t0 = time.time()
     model.train()
 
     if current_pde_error > pde_threshold:
-        # BOOST: PDE error exceeds threshold -> inject HF data and retrain
-        print(f"Status: [BOOST] (Surgical Precision Mode)...")
+        # ── BOOST ─────────────────────────────────────────────────────────────
+        # Fetch HF data at target_t, append to replay buffer, and retrain with
+        # combined data loss + forward-looking PDE loss over [current_t, target_t].
+        boost_points.append(target_t)
+        pde_log.append((target_t, current_pde_error, True))
+        print("BOOST")
 
-        # Fetch HF ground truth at target time
         X_new, Y_new, u_h, v_h, p_h = generator.get_data_at_t(GRID, GRID, target_t)
         x_new_t = to_tensor([X_new.flatten()])
         y_new_t = to_tensor([Y_new.flatten()])
@@ -362,62 +348,71 @@ while current_t < T_final:
         v_new_t = to_tensor([v_h.flatten()])
         p_new_t = to_tensor([p_h.flatten()])
 
-        # Append new data to replay buffer
-        rb_x = torch.cat([rb_x, x_new_t], 0); rb_y = torch.cat([rb_y, y_new_t], 0); rb_t = torch.cat([rb_t, t_new_t], 0)
-        rb_u = torch.cat([rb_u, u_new_t], 0); rb_v = torch.cat([rb_v, v_new_t], 0); rb_p = torch.cat([rb_p, p_new_t], 0)
+        rb_x = torch.cat([rb_x, x_new_t]); rb_y = torch.cat([rb_y, y_new_t]); rb_t = torch.cat([rb_t, t_new_t])
+        rb_u = torch.cat([rb_u, u_new_t]); rb_v = torch.cat([rb_v, v_new_t]); rb_p = torch.cat([rb_p, p_new_t])
 
-        # Step B: Adam with data loss + forward-looking PDE loss
-        for i in range(300):
+        for _ in range(300):
             optimizer.zero_grad()
-            c_new = model(x_new_t, y_new_t, t_new_t)
-            lfn_u, lfn_v, lfn_p = get_lf_solution_torch(x_new_t, y_new_t, t_new_t, L_val, T_scale)
-            loss_new = torch.mean((lfn_u + c_new[:,0:1] - u_new_t)**2 +
-                                  (lfn_v + c_new[:,1:2] - v_new_t)**2 +
-                                  (lfn_p + c_new[:,2:3] - p_new_t)**2)
-
-            # Forward-looking PDE loss: sample collocation points in [current_t, target_t]
-            t_future = (torch.rand(2000, 1, device=device) * dt + current_t) / T_scale
-            x_p = (torch.rand(2000, 1, device=device) * L_val).requires_grad_(True)
-            y_p = (torch.rand(2000, 1, device=device) * L_val).requires_grad_(True)
-            t_future = t_future.requires_grad_(True)
-            lm, lmo = get_pde_loss(model, x_p, y_p, t_future)
-
-            total_loss = loss_new * 100.0 + (lm + lmo) * 10.0
-            total_loss.backward()
+            u_lf, v_lf, p_lf = get_lf_solution_torch(x_new_t, y_new_t, t_new_t, L_val, T_scale)
+            corr = model(x_new_t, y_new_t, t_new_t)
+            loss_data = torch.mean(
+                (u_lf + corr[:,0:1] - u_new_t)**2 +
+                (v_lf + corr[:,1:2] - v_new_t)**2 +
+                (p_lf + corr[:,2:3] - p_new_t)**2
+            )
+            # Forward-looking PDE loss over the interval [current_t, target_t]
+            t_fwd = ((torch.rand(2000, 1, device=device) * dt + current_t) / T_scale).requires_grad_(True)
+            x_p   = (torch.rand(2000, 1, device=device) * L_val).requires_grad_(True)
+            y_p   = (torch.rand(2000, 1, device=device) * L_val).requires_grad_(True)
+            lm, lmo = get_pde_loss(model, x_p, y_p, t_fwd)
+            (loss_data * 100.0 + (lm + lmo) * 10.0).backward()
             optimizer.step()
 
-        # Step C: L-BFGS fine-tuning on current time step
-        print("   -> L-BFGS Fine-tuning...", end="")
+        # L-BFGS fine-tuning on the newly injected data
         lbfgs = optim.LBFGS(model.parameters(), max_iter=50, line_search_fn="strong_wolfe")
         def closure():
             lbfgs.zero_grad()
-            c = model(x_new_t, y_new_t, t_new_t)
-            lfn_u, lfn_v, lfn_p = get_lf_solution_torch(x_new_t, y_new_t, t_new_t, L_val, T_scale)
-            loss = torch.mean((lfn_u + c[:,0:1] - u_new_t)**2 + (lfn_v + c[:,1:2] - v_new_t)**2)
+            u_lf, v_lf, p_lf = get_lf_solution_torch(x_new_t, y_new_t, t_new_t, L_val, T_scale)
+            corr = model(x_new_t, y_new_t, t_new_t)
+            loss = torch.mean(
+                (u_lf + corr[:,0:1] - u_new_t)**2 +
+                (v_lf + corr[:,1:2] - v_new_t)**2
+            )
             loss.backward()
             return loss
         lbfgs.step(closure)
-        print(" Done.")
 
     else:
-        # KEEP: PDE error within threshold -> self-refine with PDE + replay buffer
-        print("Status: [KEEP] (Self-Refining)...")
-        for i in range(keep_epochs):
+        # ── KEEP ──────────────────────────────────────────────────────────────
+        # Self-refine using only PDE loss at the current time step,
+        # regularized by replay buffer to prevent catastrophic forgetting.
+        pde_log.append((target_t, current_pde_error, False))
+        print("KEEP")
+
+        for _ in range(keep_epochs):
             optimizer.zero_grad()
             lm, lmo = get_pde_loss(model, x_test, y_test, t_test)
 
-            # Replay buffer regularization to prevent catastrophic forgetting
             idx = torch.randperm(rb_x.size(0))[:1000]
+            u_lf, _, _ = get_lf_solution_torch(rb_x[idx], rb_y[idx], rb_t[idx], L_val, T_scale)
             corr_old = model(rb_x[idx], rb_y[idx], rb_t[idx])
-            lf_u, _, _ = get_lf_solution_torch(rb_x[idx], rb_y[idx], rb_t[idx], L_val, T_scale)
-            loss_reg = torch.mean((lf_u + corr_old[:,0:1] - rb_u[idx])**2)
+            loss_reg = torch.mean((u_lf + corr_old[:,0:1] - rb_u[idx])**2)
 
-            loss = (lm + lmo) * 10.0 + loss_reg * 100.0
-            loss.backward()
+            ((lm + lmo) * 10.0 + loss_reg * 100.0).backward()
             optimizer.step()
 
-    print(f"   -> Train: {time.time() - train_start_time:.2f}s")
+    print(f"        training time: {time.time()-t0:.1f}s")
     current_t = target_t
 
-total_phase2_time = time.time() - phase2_start_time
-print(f"\n[Phase 2] Complete. Total Time: {total_phase2_time:.1f}s")
+print(f"\n[Phase 2] Complete.  Total: {(time.time()-phase2_start)/60:.1f} min")
+print(f"BOOST points ({len(boost_points)}): {boost_points}")
+
+
+# ── Save logs for evaluate.py ─────────────────────────────────────────────────
+pde_log_arr = np.array(
+    pde_log,
+    dtype=[('time', float), ('pde_error', float), ('is_boost', bool)]
+)
+np.save("pde_log.npy",       pde_log_arr)
+np.save("pde_threshold.npy", np.array([pde_threshold]))
+print(f">> Saved pde_log.npy ({len(pde_log_arr)} steps), pde_threshold.npy")
